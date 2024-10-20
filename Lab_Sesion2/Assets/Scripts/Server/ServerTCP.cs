@@ -4,6 +4,9 @@ using System.Net.Sockets;
 using System.Threading;
 using TMPro;
 using System.Text;
+using UnityEditor;
+using UnityEditor.VersionControl;
+using System.Collections.Generic;
 
 public class ServerTCP : MonoBehaviour
 {
@@ -13,6 +16,8 @@ public class ServerTCP : MonoBehaviour
     public GameObject UItextObj;
     TextMeshProUGUI UItext;
     string serverText;
+
+    List<User> connectedUsers = new List<User>();
 
     public struct User
     {
@@ -80,6 +85,11 @@ public class ServerTCP : MonoBehaviour
             Debug.Log("New User Remote Endpoint: " + newUser.socket.RemoteEndPoint.ToString());
             Debug.Log("New User Local Endpoint: " + newUser.socket.LocalEndPoint.ToString());
 
+            lock (connectedUsers)
+            {
+                connectedUsers.Add(newUser);
+            }
+
             IPEndPoint clientep = (IPEndPoint)newUser.socket.RemoteEndPoint;
             serverText = serverText + "\n" + "Connected with " + clientep.Address.ToString() + " at port " + clientep.Port.ToString();
 
@@ -109,16 +119,40 @@ public class ServerTCP : MonoBehaviour
             
             if (recv == 0)
                 break;
-            else
-            {
-                serverText = serverText + "\n" + Encoding.ASCII.GetString(data, 0, recv);
-            }
+
+            string recievedMessage = Encoding.ASCII.GetString(data, 0, recv);
+            serverText = serverText + "\n" + recievedMessage;
+
+            BroadcastMessageServer(recievedMessage, user);
 
             //TO DO 6
             //We'll send a ping back every time a message is received
             //Start another thread to send a message, same parameters as this one.
-            Thread answer = new Thread(() => Send(user));
-            answer.Start();
+            //Thread answer = new Thread(() => Send(user));
+            //answer.Start();
+        }
+
+        lock (connectedUsers)
+        {
+            BroadcastMessageServer($"{user.name} has disconnected.", user);
+            connectedUsers.Remove(user);
+        }
+        user.socket.Close();
+    }
+
+    void BroadcastMessageServer(string message, User sender)
+    {
+        byte[] buffer = Encoding.ASCII.GetBytes(message);
+
+        lock (connectedUsers)
+        {
+            foreach (User user in connectedUsers)
+            {
+                if (user.socket != sender.socket)  // Don't send to the sender
+                {
+                    user.socket.Send(buffer);
+                }
+            }
         }
     }
 

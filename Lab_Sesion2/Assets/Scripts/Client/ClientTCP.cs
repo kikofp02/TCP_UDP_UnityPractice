@@ -8,9 +8,13 @@ using TMPro;
 public class ClientTCP : MonoBehaviour
 {
     public GameObject UItextObj;
+    public TMP_InputField inputFieldMessage;
     TextMeshProUGUI UItext;
     string clientText;
     Socket server;
+    public string serverIp;
+    Thread receiveThread;
+    bool isConnected = false;
 
     // Start is called before the first frame update
     void Start()
@@ -28,6 +32,11 @@ public class ClientTCP : MonoBehaviour
 
     public void StartClient()
     {
+        if (isConnected)
+        {
+
+        }
+
         Thread connect = new Thread(Connect);
         connect.Start();
     }
@@ -40,33 +49,37 @@ public class ClientTCP : MonoBehaviour
         //When calling connect and succeeding, our server socket will create a
         //connection between this endpoint and the server's endpoint
 
-        IPEndPoint ipep = new IPEndPoint(IPAddress.Parse("192.168.206.15"), 9050);
+        IPEndPoint ipep = new IPEndPoint(IPAddress.Parse(serverIp), 9050);
         server = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
 
         server.Connect(ipep);
-
+        isConnected = true;
         //TO DO 4
         //With an established connection, we want to send a message so the server aacknowledges us
         //Start the Send Thread
-        Thread sendThread = new Thread(Send);
-        sendThread.Start();
+        //Thread sendThread = new Thread(Send);
+        //sendThread.Start();
 
         //TO DO 7
         //If the client wants to receive messages, it will have to start another thread. Call Receive()
-        Thread receiveThread = new Thread(Receive);
+        receiveThread = new Thread(Receive);
         receiveThread.Start();
 
     }
-    void Send()
+    public void OnSendMessage()
+    {
+        string message = inputFieldMessage.text;
+        inputFieldMessage.text = "";
+
+        Send(message);
+    }
+    void Send(string message)
     {
         //TO DO 4
         //Using the socket that stores the connection between the 2 endpoints, call the TCP send function with
         //an encoded message
 
-        byte[] buffer = new byte[1024];
-        clientText = "Hello World";
-        buffer = Encoding.ASCII.GetBytes(clientText);
-        
+        byte[] buffer = Encoding.ASCII.GetBytes(message);        
         server.Send(buffer);
     }
 
@@ -74,10 +87,25 @@ public class ClientTCP : MonoBehaviour
     //Similar to what we already did with the server, we have to call the Receive() method from the socket.
     void Receive()
     {
-        byte[] data = new byte[1024];
-        int recv = server.Receive(data);
+        while (isConnected)
+        {
+            byte[] data = new byte[1024];
+            int recv = server.Receive(data);
 
-        clientText = clientText += "\n" + Encoding.ASCII.GetString(data, 0, recv);
+            if (recv == 0)
+                break;
+
+            clientText = clientText += "\n" + Encoding.ASCII.GetString(data, 0, recv);
+        }
     }
 
+    public void Disconnect()
+    {
+        isConnected = false;
+        if (server != null)
+        {
+            server.Shutdown(SocketShutdown.Both);
+            server.Close();
+        }
+    }
 }
