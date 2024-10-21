@@ -7,17 +7,17 @@ using System.Text;
 using UnityEditor;
 using UnityEditor.VersionControl;
 using System.Collections.Generic;
+using static ServerTCP;
 
 public class ServerTCP : MonoBehaviour
 {
     Socket socket;
     Thread mainThread = null;
-
-    public GameObject UItextObj;
-    TextMeshProUGUI UItext;
     string serverText;
 
     List<User> connectedUsers = new List<User>();
+
+    public GameObject functionalities;
 
     public struct User
     {
@@ -27,15 +27,13 @@ public class ServerTCP : MonoBehaviour
 
     void Start()
     {
-        UItext = UItextObj.GetComponent<TextMeshProUGUI>();
-
+        
     }
 
 
     void Update()
     {
-        UItext.text = serverText;
-
+        
     }
 
 
@@ -82,13 +80,12 @@ public class ServerTCP : MonoBehaviour
 
             newUser.socket = socket.Accept();//accept the socket
 
-            Debug.Log("New User Remote Endpoint: " + newUser.socket.RemoteEndPoint.ToString());
-            Debug.Log("New User Local Endpoint: " + newUser.socket.LocalEndPoint.ToString());
-
             lock (connectedUsers)
             {
                 connectedUsers.Add(newUser);
             }
+
+            BroadcastMessageServer($"{newUser.name} is now connected.", newUser);
 
             IPEndPoint clientep = (IPEndPoint)newUser.socket.RemoteEndPoint;
             serverText = serverText + "\n" + "Connected with " + clientep.Address.ToString() + " at port " + clientep.Port.ToString();
@@ -121,6 +118,7 @@ public class ServerTCP : MonoBehaviour
                 break;
 
             string recievedMessage = Encoding.ASCII.GetString(data, 0, recv);
+            recievedMessage = $"{user.name} - " + recievedMessage;
             serverText = serverText + "\n" + recievedMessage;
 
             BroadcastMessageServer(recievedMessage, user);
@@ -140,7 +138,7 @@ public class ServerTCP : MonoBehaviour
         user.socket.Close();
     }
 
-    void BroadcastMessageServer(string message, User sender)
+    public void BroadcastMessageServer(string message, User sender)
     {
         byte[] buffer = Encoding.ASCII.GetBytes(message);
 

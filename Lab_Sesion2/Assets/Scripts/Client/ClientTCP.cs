@@ -7,27 +7,24 @@ using TMPro;
 
 public class ClientTCP : MonoBehaviour
 {
-    public GameObject UItextObj;
-    public TMP_InputField inputFieldMessage;
-    TextMeshProUGUI UItext;
     string clientText;
     Socket server;
     public string serverIp;
     Thread receiveThread;
     bool isConnected = false;
 
+    public GameObject functionalities;
+
     // Start is called before the first frame update
     void Start()
     {
-        UItext = UItextObj.GetComponent<TextMeshProUGUI>();
-
+        
     }
 
     // Update is called once per frame
     void Update()
     {
-        UItext.text = clientText;
-
+        
     }
 
     public void StartClient()
@@ -66,14 +63,7 @@ public class ClientTCP : MonoBehaviour
         receiveThread.Start();
 
     }
-    public void OnSendMessage()
-    {
-        string message = inputFieldMessage.text;
-        inputFieldMessage.text = "";
-
-        Send(message);
-    }
-    void Send(string message)
+    public void Send(string message)
     {
         //TO DO 4
         //Using the socket that stores the connection between the 2 endpoints, call the TCP send function with

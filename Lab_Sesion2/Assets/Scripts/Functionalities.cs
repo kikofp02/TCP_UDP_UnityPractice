@@ -1,5 +1,4 @@
-using System.Collections;
-using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -8,63 +7,117 @@ public class Functionalities : MonoBehaviour
     public Toggle tcp;
     public Toggle udp;
 
-    public GameObject MainMenu;
-    public GameObject Connection;
-    public GameObject Input;
-    public GameObject LobyView;
+    public GameObject MainMenuSec;
+    public GameObject LoginSec;
+    public GameObject ConnectionSec;
+    public GameObject InputSec;
+    public GameObject LobyViewSec;
 
-    public InputField inputIP;
-    public InputField messageInputField;
+    public TMP_InputField inputUsername;
+    public TMP_InputField inputIP;
+    public TMP_InputField inputChatTxt;
 
-    public GameObject ConectionUDP;
-    public GameObject ConectionTCP;
+    public GameObject Conections;
+    public GameObject MessagePrefab;
+    public GameObject ViewScrollContent;
 
-    public GameObject ClientUDP;
-    public GameObject ClientTCP;
+    public string userName;
+    bool isHost = false;
+    bool isChatting = false;
 
     private void Start()
     {
         
     }
 
+    private void Update()
+    {
+        if (isChatting)
+        {
+            if (Input.GetKeyDown(KeyCode.Return))
+            {
+                string message = inputChatTxt.text;
+                inputChatTxt.text = "";
+
+                OnSendMessage(message);
+            }
+        }
+    }
+
+    public void SetUserName()
+    {
+        userName = inputUsername.text;
+        inputUsername.text = "";
+        LoginSec.SetActive(false);
+        ConnectionSec.SetActive(true);
+    }
+
     public void ButtonHost()
     {
         if (tcp.isOn)
-            ConectionTCP.GetComponent<ServerTCP>().startServer();
-        else
-            ConectionUDP.GetComponent<ServerUDP>().startServer();
+            Conections.GetComponent<ServerTCP>().startServer();
+        //else
+            //Conections.GetComponent<ServerUDP>().startServer();
 
-        MainMenu.SetActive(false);
-        LobyView.SetActive(true);
+        MainMenuSec.SetActive(false);
+        LobyViewSec.SetActive(true);
+        isHost = true;
+        isChatting = true;
     }
 
     public void ButtonJoin()
     {
-        Connection.SetActive(false);
-        Input.SetActive(true);
+        ConnectionSec.SetActive(false);
+        InputSec.SetActive(true);
     }
 
     public void JoinIP()
     {
         if (tcp.isOn)
-            ClientTCP.GetComponent<ClientTCP>().serverIp = inputIP.text;
-        else
-            ClientUDP.GetComponent<ClientUDP>().serverIp = inputIP.text;
+            Conections.GetComponent<ClientTCP>().serverIp = inputIP.text;
+        //else
+            //Conections.GetComponent<ClientUDP>().serverIp = inputIP.text;
 
-        MainMenu.SetActive(false);
-        LobyView.SetActive(true);
-        Connection.SetActive(true);
-        Input.SetActive(false);
+        MainMenuSec.SetActive(false);
+        LobyViewSec.SetActive(true);
+        ConnectionSec.SetActive(true);
+        InputSec.SetActive(false);
+        isChatting = true;
     }
 
     public void ExitLoby()
     {
         if (tcp.isOn)
-            ClientTCP.GetComponent<ClientTCP>().Disconnect();
-        else
-            ClientUDP.GetComponent<ClientUDP>().Disconnect();
+            Conections.GetComponent<ClientTCP>().Disconnect();
+        //else
+            //Conections.GetComponent<ClientUDP>().Disconnect();
 
-        MainMenu.SetActive(true);
-        LobyView.SetActive(false);
+        MainMenuSec.SetActive(true);
+        LobyViewSec.SetActive(false);
+        isHost = false;
+        isChatting = false;
+    }
+
+    public void OnSendMessage(string message)
+    {
+        if (isHost)
+        {
+            if (tcp.isOn)
+                Conections.GetComponent<ServerTCP>().BroadcastMessageServer(message, null);
+            //else
+            //    Conections.GetComponent<ServerUDP>().BroadcastMessageServer(message, null);
+        }
+        else
+        {
+            if (tcp.isOn)
+                Conections.GetComponent<ClientTCP>().Send(message);
+            //else
+            //    Conections.GetComponent<ClientUDP>().Send(message);
+        }
+    }
+
+    public void InstanciateMessage(string message)
+    {
+
     }
 }
