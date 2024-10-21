@@ -100,6 +100,10 @@ public class Functionalities : MonoBehaviour
 
     public void OnSendMessage(string message)
     {
+
+        InstanciateMessage(message);
+
+
         if (isHost)
         {
             if (tcp.isOn)
@@ -114,10 +118,27 @@ public class Functionalities : MonoBehaviour
             //else
             //    Conections.GetComponent<ClientUDP>().Send(message);
         }
+
+        
     }
 
     public void InstanciateMessage(string message)
     {
+        GameObject messageObject = Instantiate(MessagePrefab, ViewScrollContent.transform);
 
+        Debug.Log("Instaniated Object");
+
+        TextMeshProUGUI messageTextComponent = messageObject.GetComponentInChildren<TextMeshProUGUI>();
+        if (messageTextComponent != null)
+            messageTextComponent.text = message;
+
+        Canvas.ForceUpdateCanvases();
+        ScrollToBottom();
+    }
+
+    private void ScrollToBottom()
+    {
+        RectTransform contentRect = ViewScrollContent.transform.GetComponent<RectTransform>();
+        contentRect.anchoredPosition = new Vector2(contentRect.anchoredPosition.x, 0);
     }
 }

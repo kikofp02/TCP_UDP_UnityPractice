@@ -19,7 +19,7 @@ public class ServerTCP : MonoBehaviour
 
     public GameObject functionalities;
 
-    public struct User
+    public class User
     {
         public string name;
         public Socket socket;
