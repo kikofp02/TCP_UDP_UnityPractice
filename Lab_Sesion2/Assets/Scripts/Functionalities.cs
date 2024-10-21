@@ -10,18 +10,23 @@ public class Functionalities : MonoBehaviour
     public GameObject MainMenuSec;
     public GameObject LoginSec;
     public GameObject ConnectionSec;
-    public GameObject InputSec;
+    public GameObject InputIpSec;
+    public GameObject InputLobyNameSec;
     public GameObject LobyViewSec;
 
     public TMP_InputField inputUsername;
     public TMP_InputField inputIP;
+    public TMP_InputField inputLobyName;
     public TMP_InputField inputChatTxt;
 
     public GameObject Conections;
     public GameObject MessagePrefab;
     public GameObject ViewScrollContent;
 
-    public string userName;
+    public TMP_Text LobyNameText;
+
+    public string userName = "";
+    public string lobyName = "Connected to - ";
     bool isHost = false;
     bool isChatting = false;
 
@@ -32,11 +37,31 @@ public class Functionalities : MonoBehaviour
 
     private void Update()
     {
+        if (!isHost)
+        {
+            if (tcp.isOn)
+            {
+                if (Conections.GetComponent<ClientTCP>().lobyName != lobyName)
+                {
+                    lobyName = Conections.GetComponent<ClientTCP>().lobyName;
+                    LobyNameText.text = "Connected to - " + lobyName;
+                }
+            }
+            else
+            {
+                if (Conections.GetComponent<ClientUDP>().lobyName != lobyName)
+                {
+                    lobyName = Conections.GetComponent<ClientUDP>().lobyName;
+                    LobyNameText.text = "Connected to - " + lobyName;
+                }
+            }
+        }
+
         if (isChatting)
         {
             if (Input.GetKeyDown(KeyCode.Return))
             {
-                string message = inputChatTxt.text;
+                string message = $"{userName} - " + inputChatTxt.text;
                 inputChatTxt.text = "";
 
                 OnSendMessage(message);
@@ -54,43 +79,61 @@ public class Functionalities : MonoBehaviour
 
     public void ButtonHost()
     {
-        if (tcp.isOn)
-            Conections.GetComponent<ServerTCP>().startServer();
-        //else
-            //Conections.GetComponent<ServerUDP>().startServer();
-
-        MainMenuSec.SetActive(false);
-        LobyViewSec.SetActive(true);
-        isHost = true;
-        isChatting = true;
+        ConnectionSec.SetActive(false);
+        InputLobyNameSec.SetActive(true);
     }
 
     public void ButtonJoin()
     {
         ConnectionSec.SetActive(false);
-        InputSec.SetActive(true);
+        InputIpSec.SetActive(true);
+    }
+
+    public void StartHost()
+    {
+        lobyName = inputLobyName.text;
+        LobyNameText.text = "Connected to - " + lobyName;
+
+        if (tcp.isOn)
+            Conections.GetComponent<ServerTCP>().startServer(lobyName);
+        else
+            Conections.GetComponent<ServerUDP>().startServer(lobyName);
+
+        MainMenuSec.SetActive(false);
+        LobyViewSec.SetActive(true);
+        ConnectionSec.SetActive(true);
+        InputLobyNameSec.SetActive(false);
+        isHost = true;
+        isChatting = true;
     }
 
     public void JoinIP()
     {
         if (tcp.isOn)
-            Conections.GetComponent<ClientTCP>().serverIp = inputIP.text;
-        //else
-            //Conections.GetComponent<ClientUDP>().serverIp = inputIP.text;
+            Conections.GetComponent<ClientTCP>().StartClient(inputIP.text);
+        else
+            Conections.GetComponent<ClientUDP>().StartClient(inputIP.text);
 
         MainMenuSec.SetActive(false);
         LobyViewSec.SetActive(true);
         ConnectionSec.SetActive(true);
-        InputSec.SetActive(false);
+        InputIpSec.SetActive(false);
         isChatting = true;
     }
 
     public void ExitLoby()
     {
-        if (tcp.isOn)
-            Conections.GetComponent<ClientTCP>().Disconnect();
-        //else
-            //Conections.GetComponent<ClientUDP>().Disconnect();
+        if (isHost)
+        {
+            //TODO Shut Down server
+        }
+        else
+        {
+            if (tcp.isOn)
+                Conections.GetComponent<ClientTCP>().Disconnect();
+            //else
+            //    Conections.GetComponent<ClientUDP>().Disconnect();
+        }
 
         MainMenuSec.SetActive(true);
         LobyViewSec.SetActive(false);
@@ -100,7 +143,6 @@ public class Functionalities : MonoBehaviour
 
     public void OnSendMessage(string message)
     {
-
         InstanciateMessage(message);
 
 
@@ -108,18 +150,16 @@ public class Functionalities : MonoBehaviour
         {
             if (tcp.isOn)
                 Conections.GetComponent<ServerTCP>().BroadcastMessageServer(message, null);
-            //else
-            //    Conections.GetComponent<ServerUDP>().BroadcastMessageServer(message, null);
+            else
+                Conections.GetComponent<ServerUDP>().BroadcastMessageServer(message, null);
         }
         else
         {
             if (tcp.isOn)
                 Conections.GetComponent<ClientTCP>().Send(message);
-            //else
-            //    Conections.GetComponent<ClientUDP>().Send(message);
+            else
+                Conections.GetComponent<ClientUDP>().Send(message);
         }
-
-        
     }
 
     public void InstanciateMessage(string message)

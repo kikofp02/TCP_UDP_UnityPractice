@@ -7,22 +7,27 @@ using System.Text;
 using UnityEditor;
 using System.Collections.Generic;
 using static ServerTCP;
+using System.Collections.Concurrent;
 
 public class ServerTCP : MonoBehaviour
 {
     Socket socket;
     Thread mainThread = null;
-    string serverText;
-
-    List<User> connectedUsers = new List<User>();
 
     public GameObject functionalities;
+
+    private ConcurrentQueue<string> messageQueue = new ConcurrentQueue<string>();
+
+    string username;
+    string lobyName;
 
     public class User
     {
         public string name;
         public Socket socket;
     }
+
+    List<User> connectedUsers = new List<User>();
 
     void Start()
     {
@@ -32,109 +37,131 @@ public class ServerTCP : MonoBehaviour
 
     void Update()
     {
-        
+        while (messageQueue.TryDequeue(out string message))
+        {
+            functionalities.GetComponent<Functionalities>().InstanciateMessage(message);
+        }
     }
 
 
-    public void startServer()
+    public void startServer(string lobyName)
     {
-        serverText = "Starting TCP Server...";
+        this.lobyName = lobyName;
+        username = functionalities.GetComponent<Functionalities>().userName;
 
-        //TO DO 1
-        //Create and bind the socket
-        //Any IP that wants to connect to the port 9050 with TCP, will communicate with this socket
-        //Don't forget to set the socket in listening mode
-        socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+        try
+        {
+            Debug.Log("Starting TCP Server...");
 
-        IPEndPoint endPoint = new IPEndPoint(IPAddress.Any, 9050);
-        socket.Bind(endPoint);
+            socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            IPEndPoint endPoint = new IPEndPoint(IPAddress.Any, 9050);
 
-        socket.Listen(10);
- 
+            socket.Bind(endPoint);
+            socket.Listen(10);
 
-        //TO DO 3
-        //TIme to check for connections, start a thread using CheckNewConnections
-        mainThread = new Thread(CheckNewConnections);
-        mainThread.Start();
+            Debug.Log("Server started. Listening for connections...");
+
+            mainThread = new Thread(CheckNewConnections);
+            mainThread.Start();
+        }
+        catch (SocketException socketEx)
+        {
+            Debug.LogError($"SocketException in startServer: {socketEx.Message}");
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogError($"Exception in startServer: {ex.Message}");
+        }
     }
 
     void CheckNewConnections()
     {
-        serverText = serverText + "\n" + "Waiting for new Client...";
+        Debug.Log("Waiting for new Client...");
 
         while (true)
         {
-            User newUser = new User();
-            newUser.name = "";
-            //TO DO 3
-            //TCP makes it so easy to manage conections, so we are going
-            //to put it to use
-            //Accept any incoming clients and store them in this user.
-            //When accepting, we can now store a copy of our server socket
-            //who has established a communication between a
-            //local endpoint (server) and the remote endpoint(client)
-            //If you want to check their ports and adresses, you can acces
-            //the socket's RemoteEndpoint and LocalEndPoint
-            //try printing them on the console
-
-            newUser.socket = socket.Accept();//accept the socket
-
-            lock (connectedUsers)
+            try
             {
-                connectedUsers.Add(newUser);
+                User newUser = new User();
+                newUser.socket = socket.Accept();
+
+                byte[] data = new byte[1024];
+                int recv = newUser.socket.Receive(data);
+
+                if (recv > 0)
+                {
+                    newUser.name = Encoding.ASCII.GetString(data, 0, recv);
+                }
+                else
+                {
+                    Debug.LogWarning("No username received from the client.");
+                    newUser.name = "Unknown User";
+                }
+
+                lock (connectedUsers)
+                {
+                    connectedUsers.Add(newUser);
+                }
+
+                Send(lobyName, newUser);
+
+                BroadcastMessageServer($"{newUser.name} is now connected.", null);
+                messageQueue.Enqueue($"{newUser.name} is now connected.");
+
+                IPEndPoint clientep = (IPEndPoint)newUser.socket.RemoteEndPoint;
+
+                Thread newConnection = new Thread(() => Receive(newUser));
+                newConnection.Start();
             }
-
-            BroadcastMessageServer($"{newUser.name} is now connected.", newUser);
-
-            IPEndPoint clientep = (IPEndPoint)newUser.socket.RemoteEndPoint;
-            serverText = serverText + "\n" + "Connected with " + clientep.Address.ToString() + " at port " + clientep.Port.ToString();
-
-            //TO DO 5
-            //For every client, we call a new thread to receive their messages. 
-            //Here we have to send our user as a parameter so we can use it's socket.
-            Thread newConnection = new Thread(() => Receive(newUser));
-            newConnection.Start();
+            catch (SocketException socketEx)
+            {
+                Debug.LogError($"SocketException in CheckNewConnections: {socketEx.Message}");
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogError($"Exception in CheckNewConnections: {ex.Message}");
+            }
         }
-        //This users could be stored in the future on a list
-        //in case you want to manage your connections
-
     }
 
     void Receive(User user)
     {
-        //TO DO 5
-        //Create an infinite loop to start receiving messages for this user
-        //You'll have to use the socket function receive to be able to get them.
         byte[] data = new byte[1024];
         int recv = 0;
 
-        while (true)
+        try
         {
-            data = new byte[1024];
-            recv = user.socket.Receive(data);
-            
-            if (recv == 0)
-                break;
+            while (true)
+            {
+                data = new byte[1024];
+                recv = user.socket.Receive(data);
 
-            string recievedMessage = Encoding.ASCII.GetString(data, 0, recv);
-            recievedMessage = $"{user.name} - " + recievedMessage;
-            serverText = serverText + "\n" + recievedMessage;
+                if (recv == 0)
+                    break;
 
-            BroadcastMessageServer(recievedMessage, user);
+                string receivedMessage = Encoding.ASCII.GetString(data, 0, recv);
+                messageQueue.Enqueue(receivedMessage);
 
-            //TO DO 6
-            //We'll send a ping back every time a message is received
-            //Start another thread to send a message, same parameters as this one.
-            //Thread answer = new Thread(() => Send(user));
-            //answer.Start();
+                BroadcastMessageServer(receivedMessage, user);
+            }
+
+            lock (connectedUsers)
+            {
+                BroadcastMessageServer($"{user.name} has disconnected.", user);
+                messageQueue.Enqueue($"{user.name} has disconnected.");
+                connectedUsers.Remove(user);
+            }
+
+            user.socket.Close();
         }
-
-        lock (connectedUsers)
+        catch (SocketException socketEx)
         {
-            BroadcastMessageServer($"{user.name} has disconnected.", user);
-            connectedUsers.Remove(user);
+            Debug.LogError($"SocketException in Receive: {socketEx.Message}");
         }
-        user.socket.Close();
+        catch (System.Exception ex)
+        {
+            Debug.LogError($"Exception in Receive: {ex.Message}");
+        }
     }
 
     public void BroadcastMessageServer(string message, User sender)
@@ -145,7 +172,7 @@ public class ServerTCP : MonoBehaviour
         {
             foreach (User user in connectedUsers)
             {
-                if (user.socket != sender.socket)  // Don't send to the sender
+                if ((sender == null) || (user.socket != sender.socket))
                 {
                     user.socket.Send(buffer);
                 }
@@ -153,13 +180,9 @@ public class ServerTCP : MonoBehaviour
         }
     }
 
-    //TO DO 6
-    //Now, we'll use this user socket to send a "ping".
-    //Just call the socket's send function and encode the string.
-    void Send(User user)
+    void Send(string message, User user)
     {
-        byte[] buffer = new byte[1024];
-        buffer = Encoding.ASCII.GetBytes("PINGA");
+        byte[] buffer = Encoding.ASCII.GetBytes(message);
 
         user.socket.Send(buffer);
     }

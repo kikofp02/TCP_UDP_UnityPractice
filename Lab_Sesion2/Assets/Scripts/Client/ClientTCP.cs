@@ -4,98 +4,151 @@ using System.Text;
 using UnityEngine;
 using System.Threading;
 using TMPro;
+using System.Collections.Concurrent;
 
 public class ClientTCP : MonoBehaviour
 {
-    string clientText;
     Socket server;
-    public string serverIp;
     Thread receiveThread;
     bool isConnected = false;
 
     public GameObject functionalities;
 
-    // Start is called before the first frame update
+    private ConcurrentQueue<string> messageQueue = new ConcurrentQueue<string>();
+
+    string username;
+    public string lobyName;
+
     void Start()
     {
         
     }
 
-    // Update is called once per frame
     void Update()
     {
-        
+        while (messageQueue.TryDequeue(out string message))
+        {
+            functionalities.GetComponent<Functionalities>().InstanciateMessage(message);
+        }
     }
 
-    public void StartClient()
+    public void StartClient(string ipAdress)
     {
+        username = functionalities.GetComponent<Functionalities>().userName;
         if (isConnected)
         {
-
+            Debug.Log("Already connected! Disconnect first.");
+            return;
         }
 
-        Thread connect = new Thread(Connect);
+        Thread connect = new Thread(() => Connect(ipAdress));
         connect.Start();
     }
-    void Connect()
+    void Connect(string ipAdress)
     {
-        //TO DO 2
-        //Create the server endpoint so we can try to connect to it.
-        //You'll need the server's IP and the port we binded it to before
-        //Also, initialize our server socket.
-        //When calling connect and succeeding, our server socket will create a
-        //connection between this endpoint and the server's endpoint
-
-        IPEndPoint ipep = new IPEndPoint(IPAddress.Parse(serverIp), 9050);
-        server = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-
-        server.Connect(ipep);
-        isConnected = true;
-        //TO DO 4
-        //With an established connection, we want to send a message so the server aacknowledges us
-        //Start the Send Thread
-        //Thread sendThread = new Thread(Send);
-        //sendThread.Start();
-
-        //TO DO 7
-        //If the client wants to receive messages, it will have to start another thread. Call Receive()
-        receiveThread = new Thread(Receive);
-        receiveThread.Start();
-
-    }
-    public void Send(string message)
-    {
-        //TO DO 4
-        //Using the socket that stores the connection between the 2 endpoints, call the TCP send function with
-        //an encoded message
-
-        byte[] buffer = Encoding.ASCII.GetBytes(message);        
-        server.Send(buffer);
-    }
-
-    //TO DO 7
-    //Similar to what we already did with the server, we have to call the Receive() method from the socket.
-    void Receive()
-    {
-        while (isConnected)
+        try
         {
+            IPEndPoint ipep = new IPEndPoint(IPAddress.Parse(ipAdress), 9050);
+            server = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            server.Connect(ipep);
+            isConnected = true;
+
+            Send(username);
+
             byte[] data = new byte[1024];
             int recv = server.Receive(data);
 
-            if (recv == 0)
-                break;
+            if (recv > 0)
+            {
+                string serverName = Encoding.ASCII.GetString(data, 0, recv);
+                lobyName = serverName;
+            }
+            else
+            {
+                Debug.LogWarning("No servername received from the host.");
+                lobyName = "Unknown Loby";
+            }
 
-            clientText = clientText += "\n" + Encoding.ASCII.GetString(data, 0, recv);
+            receiveThread = new Thread(Receive);
+            receiveThread.Start();
         }
+        catch (SocketException socketEx)
+        {
+            Debug.LogError($"SocketException: {socketEx.Message}");
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogError($"Exception during Connect: {ex.Message}");
+        }
+    }
+    public void Send(string message)
+    {
+        try
+        {
+            byte[] buffer = Encoding.ASCII.GetBytes(message);
+            server.Send(buffer);
+            Debug.Log($"Message sent: {message}");
+        }
+        catch (SocketException socketEx)
+        {
+            Debug.LogError($"SocketException during Send: {socketEx.Message}");
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogError($"Exception during Send: {ex.Message}");
+        }
+    }
+
+    void Receive()
+    {
+        try
+        {
+            while (isConnected)
+            {
+                byte[] data = new byte[1024];
+                int recv = server.Receive(data);
+
+                if (recv == 0)
+                {
+                    Debug.Log("Server closed the connection.");
+                    break;
+                }
+
+                string receivedMessage = Encoding.ASCII.GetString(data, 0, recv);
+
+                messageQueue.Enqueue(receivedMessage);
+            }
+        }
+        catch (SocketException socketEx)
+        {
+            Debug.LogError($"SocketException during Receive: {socketEx.Message}");
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogError($"Exception during Receive: {ex.Message}");
+        }
+
     }
 
     public void Disconnect()
     {
-        isConnected = false;
-        if (server != null)
+        try
         {
-            server.Shutdown(SocketShutdown.Both);
-            server.Close();
+            isConnected = false;
+            if (server != null)
+            {
+                server.Shutdown(SocketShutdown.Both);
+                server.Close();
+                Debug.Log("Disconnected from server.");
+            }
+        }
+        catch (SocketException socketEx)
+        {
+            Debug.LogError($"SocketException during Disconnect: {socketEx.Message}");
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogError($"Exception during Disconnect: {ex.Message}");
         }
     }
 }

@@ -4,98 +4,110 @@ using System.Text;
 using UnityEngine;
 using System.Threading;
 using TMPro;
+using System.Collections.Concurrent;
 using static ServerTCP;
+using System.Collections.Generic;
+using static ServerUDP;
+using System;
 
 public class ServerUDP : MonoBehaviour
 {
     Socket socket;
 
-    public GameObject UItextObj;
-    TextMeshProUGUI UItext;
-    string serverText;
+    public GameObject functionalities;
+
+    string username;
+    string lobyName;
+
+    private ConcurrentQueue<string> messageQueue = new ConcurrentQueue<string>();
+
+    public class User
+    {
+        public EndPoint endpoint;
+        public string name;
+    }
+
+    List<User> connectedUsers = new List<User>();
 
     void Start()
     {
-        UItext = UItextObj.GetComponent<TextMeshProUGUI>();
 
     }
-    public void startServer()
-    {
-        serverText = "Starting UDP Server...";
 
-        //TO DO 1
-        //UDP doesn't keep track of our connections like TCP
-        //This means that we "can only" reply to other endpoints,
-        //since we don't know where or who they are
-        //We want any UDP connection that wants to communicate with 9050 port to send it to our socket.
-        //So as with TCP, we create a socket and bind it to the 9050 port. 
+    void Update()
+    {
+        while (messageQueue.TryDequeue(out string message))
+        {
+            functionalities.GetComponent<Functionalities>().InstanciateMessage(message);
+        }
+    }
+
+    public void startServer(string lobyName)
+    {
+        this.lobyName = lobyName;
+        username = functionalities.GetComponent<Functionalities>().userName;
 
         IPEndPoint ipep = new IPEndPoint(IPAddress.Any, 9050);
         socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
 
         socket.Bind(ipep);
 
-        //TO DO 3
-        //Our client is sending a handshake, the server has to be able to recieve it
-        //It's time to call the Receive thread
         Thread newConnection = new Thread(Receive);
         newConnection.Start();
     }
-
-    void Update()
-    {
-        UItext.text = serverText;
-
-    }
-
  
     void Receive()
     {
         int recv = 0;
         byte[] data = new byte[1024];
         
-        serverText = serverText + "\n" + "Waiting for new Client...";
-
-        //TO DO 3
-        //We don't know who may be comunicating with this server, so we have to create an
-        //endpoint with any address and an IpEndpoint from it to reply to it later.
         IPEndPoint sender = new IPEndPoint(IPAddress.Any, 0);
         EndPoint Remote = (EndPoint)(sender);
 
-        //Loop the whole process, and start receiveing messages directed to our socket
-        //(the one we binded to a port before)
-        //When using socket.ReceiveFrom, be sure send our remote as a reference so we can keep
-        //this adress (the client) and reply to it on TO DO 4
-        
         while (true)
         {
             data = new byte[1024];
-            socket.ReceiveFrom(data, ref Remote);
+            recv = socket.ReceiveFrom(data, ref Remote);
+            string receivedMessage = Encoding.ASCII.GetString(data, 0, recv);
 
-            serverText = serverText + "\n" + "Message received from {0}:" + Remote.ToString();
-            serverText = serverText + "\n" + Encoding.ASCII.GetString(data, 0, recv);
+            User user = connectedUsers.Find(u => u.endpoint.Equals(Remote));
+            if (user == null)
+            {
+                user = new User { endpoint = Remote, name = "Unknown User" };
+                connectedUsers.Add(user);
+                Send(lobyName, user);
+            }
 
-            //TO DO 4
-            //When our UDP server receives a message from a random remote, it has to send a ping,
-            //Call a send thread
-            Thread answer = new Thread(() => Send(Remote));
-            answer.Start();
+            if (receivedMessage.StartsWith("Name: "))
+            {
+                user.name = receivedMessage.Substring(6);
+                BroadcastMessageServer($"{user.name} has connected.", null);
+                messageQueue.Enqueue($"{user.name} has connected.");
+            }
+            else
+            {
+                BroadcastMessageServer(receivedMessage, user);
+                messageQueue.Enqueue(receivedMessage);
+            }
         }
-
     }
 
-    void Send(EndPoint Remote)
+    public void BroadcastMessageServer(string message, User sender)
     {
-        //TO DO 4
-        //Use socket.SendTo to send a ping using the remote we stored earlier.
-        byte[] data = new byte[1024];
-        string welcome = "Ping";
+        byte[] buffer = Encoding.ASCII.GetBytes(message);
 
-        data = Encoding.ASCII.GetBytes(welcome);
-
-        socket.SendTo(data, Remote);
-
+        foreach (User user in connectedUsers)
+        {
+            if (sender == null || user.endpoint != sender.endpoint)
+            {
+                socket.SendTo(buffer, user.endpoint);
+            }
+        }
     }
 
-   
+    void Send(string message, User user)
+    {
+        byte[] buffer = Encoding.ASCII.GetBytes(message);
+        socket.SendTo(buffer, user.endpoint);
+    }
 }

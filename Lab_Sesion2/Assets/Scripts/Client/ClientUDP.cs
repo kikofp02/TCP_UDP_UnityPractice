@@ -4,76 +4,80 @@ using System.Text;
 using UnityEngine;
 using System.Threading;
 using TMPro;
+using System.Collections.Concurrent;
 
 public class ClientUDP : MonoBehaviour
 {
     Socket socket;
-    public GameObject UItextObj;
-    TextMeshProUGUI UItext;
     string clientText;
+    IPEndPoint serverIpep;
 
-    // Start is called before the first frame update
+    public GameObject functionalities;
+
+    private ConcurrentQueue<string> messageQueue = new ConcurrentQueue<string>();
+
+    string username;
+    public string lobyName;
+
     void Start()
     {
-        UItext = UItextObj.GetComponent<TextMeshProUGUI>();
 
-    }
-    public void StartClient()
-    {
-        Thread mainThread = new Thread(Send);
-        mainThread.Start();
     }
 
     void Update()
     {
-        UItext.text = clientText;
+        while (messageQueue.TryDequeue(out string message))
+        {
+            functionalities.GetComponent<Functionalities>().InstanciateMessage(message);
+        }
     }
 
-    void Send()
+    public void StartClient(string ipAddress)
     {
-        //TO DO 2
-        //Unlike with TCP, we don't "connect" first,
-        //we are going to send a message to establish our communication so we need an endpoint
-        //We need the server's IP and the port we've binded it to before
-        //Again, initialize the socket
-        IPEndPoint ipep = new IPEndPoint(IPAddress.Parse("192.168.206.15"), 9050);
-
+        serverIpep = new IPEndPoint(IPAddress.Parse(ipAddress), 9050);
         socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
 
-        socket.Connect(ipep);
-
-        //TO DO 2.1 
-        //Send the Handshake to the server's endpoint.
-        //This time, our UDP socket doesn't have it, so we have to pass it
-        //as a parameter on it's SendTo() method
+        socket.Connect(serverIpep);
+        string usernamemsg = "Name: " + username;
+        Send(usernamemsg);
 
         byte[] data = new byte[1024];
-        string handshake = "Hello World";
+        EndPoint remote = (EndPoint)serverIpep;
+        int recv = socket.ReceiveFrom(data, ref remote);
 
-        socket.SendTo(Encoding.ASCII.GetBytes(handshake), ipep);
-  
-        //TO DO 5
-        //We'll wait for a server response,
-        //so you can already start the receive thread
-        Thread receive = new Thread(Receive);
-        receive.Start();
+        if (recv > 0)
+        {
+            string serverName = Encoding.ASCII.GetString(data, 0, recv);
+            lobyName = serverName;
+        }
+        else
+        {
+            Debug.LogWarning("No servername received from the host.");
+            lobyName = "Unknown Loby";
+        }
 
+        Thread receiveThread = new Thread(Receive);
+        receiveThread.Start();
     }
 
-    //TO DO 5
-    //Same as in the server, in this case the remote is a bit useless
-    //since we already know it's the server who's communicating with us
+    public void Send(string message)
+    {
+        byte[] data = Encoding.ASCII.GetBytes(message);
+        socket.SendTo(data, serverIpep);
+    }
+
     void Receive()
     {
-        IPEndPoint sender = new IPEndPoint(IPAddress.Parse("192.168.206.15"), 9050);
-        EndPoint Remote = (EndPoint)sender;
         byte[] data = new byte[1024];
-        int recv = socket.ReceiveFrom(data, ref Remote);
+        EndPoint remote = (EndPoint)serverIpep;
 
-        clientText = ("Message received from {0}: " + Remote.ToString());
-        clientText = clientText += "\n" + Encoding.ASCII.GetString(data, 0, recv);
+        while (true)
+        {
+            int recv = socket.ReceiveFrom(data, ref remote);
+            string receivedMessage = Encoding.ASCII.GetString(data, 0, recv);
 
+            messageQueue.Enqueue(receivedMessage);
+        }
     }
-
 }
 
