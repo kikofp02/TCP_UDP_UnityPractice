@@ -1,11 +1,27 @@
-# Network Unity Lab2 - Implementation of a Game Loby with TCP UDP Connections
+# Network Unity Lab 2 - Game Lobby with TCP/UDP Connections  
 
-The project has evolved from the rough implementation of 2 separated scenes for the host and the clients. Now there is only one aplication that can achieve all the different posibilities. Also, on the game there is only one Console remaining, the Loby Manager, where the player can dp all the interactions.
-- Interactions:
-  - UDP/TCP Connection type, selected on the ui previous to setting the action (join/host)
-  - Username setup, as the first action to perform
-  - LobyName setup, previous to Hosting
-  - Loby chat system with several online users
-  - Disconnection from loby
+🖧 **Local Networking Practice in Unity**  
 
- Achieved both UDP/TCP connection types for client and host, several connections for both methods and Users tracking.
+This project is part of a networking systems **handout exercise**, focusing on implementing a **game lobby system** using **TCP and UDP connections**. Initially, the system used separate scenes for the **host and clients**, but it has evolved into a **single application** that handles all roles dynamically.  
+
+## 🛠️ Features  
+- **Lobby System**: Players can **host** or **join** a lobby.  
+- **UDP & TCP Support**: Connection type is selected via UI before joining/hosting.  
+- **Username & Lobby Setup**: Players set their **username** and **lobby name** before hosting.  
+- **Real-time Lobby Chat**: Multiple users can communicate in the same lobby.  
+- **User Management**: Tracks multiple connections and ensures proper handling.  
+- **Seamless Disconnection**: Players can leave the lobby at any time.  
+
+## 📌 Implementation Details  
+- **Single Scene Approach**: The system was refactored from two separate scenes (host/client) into a unified interface.  
+- **Lobby Manager Console**: The central UI for all player interactions.  
+- **Supports Multiple Connections**: Users can join using both **TCP** and **UDP** methods.  
+
+## 🚀 Future Improvements  
+- Improve UI feedback for connection status.  
+- Implement message encryption for better security.  
+- Expand with game-ready matchmaking features.  
+
+---
+
+This project successfully implements **TCP and UDP connections** in Unity, allowing multiple users to interact in a lobby-based system.
